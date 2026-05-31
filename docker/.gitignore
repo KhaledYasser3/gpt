@@ -1,0 +1,6 @@
+# Ignore database local storage and environment keys
+.env
+data/
+pg_data/
+*.sql
+*.dump
