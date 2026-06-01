@@ -1,15 +1,10 @@
-import enum
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import String, Integer, DateTime, Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from app.core.enums import MessageRole
 from app.models.base import Base
-
-class MessageRole(str, enum.Enum):
-    USER = "user"
-    ASSISTANT = "assistant"
-    SYSTEM = "system"
 
 class Chat(Base):
     __tablename__ = "chats"

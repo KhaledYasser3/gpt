@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field
-from app.models.subscription import SubscriptionStatus
+from app.core.enums import SubscriptionStatus
 
 class SubscriptionBase(BaseModel):
     token_limit: int = Field(..., gt=0, description="Token quota limit must be a positive integer")

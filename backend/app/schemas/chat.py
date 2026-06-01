@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field
-from app.models.chat import MessageRole
+from app.core.enums import MessageRole
 
 # --- Message Schemas ---
 

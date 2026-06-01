@@ -1,0 +1,51 @@
+SERVER:
+uvicorn app.main:app --reload --port 5000
+
+LOCAL_DATABASE:
+docker ps
+alembic upgrade head
+
+LOCAL_DATABASE_URL:
+postgresql+asyncpg://postgres:postgres_secure_pass_123@127.0.0.1:5435/aichatsaas
+
+BASE_URL:
+http://127.0.0.1:5000/api/v1
+
+CREATE_USER:
+POST http://127.0.0.1:5000/api/v1/admin/users
+{
+  "email": "user1@example.com",
+  "username": "user_1",
+  "full_name": "User One",
+  "password": "password1",
+  "token_limit": 10000,
+  "start_date": "2026-06-01T00:00:00Z",
+  "end_date": "2026-07-01T00:00:00Z"
+}
+
+LOGIN:
+POST http://127.0.0.1:5000/api/v1/auth/login
+{
+  "email": "user1@example.com",
+  "password": "password1"
+}
+
+REFRESH_TOKEN:
+POST http://127.0.0.1:5000/api/v1/auth/refresh
+(Requires HTTPOnly cookie 'refresh_token' to be set from LOGIN)
+
+
+ADD_TOKENS:
+PATCH http://127.0.0.1:5000/api/v1/admin/users/{user_id}/tokens
+{
+  "tokens": 5000
+}
+
+RENEW_SUBSCRIPTION:
+PATCH http://127.0.0.1:5000/api/v1/admin/users/{user_id}/renew
+{
+  "end_date": "2026-08-01T00:00:00Z"
+}
+
+DELETE_USER:
+DELETE http://127.0.0.1:5000/api/v1/admin/users/{user_id}

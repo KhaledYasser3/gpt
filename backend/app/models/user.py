@@ -1,14 +1,10 @@
-import enum
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import String, Boolean, DateTime, Enum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from app.core.enums import UserRole
 from app.models.base import Base
-
-class UserRole(str, enum.Enum):
-    ADMIN = "admin"
-    USER = "user"
 
 class User(Base):
     __tablename__ = "users"
@@ -19,6 +15,7 @@ class User(Base):
         default=uuid.uuid4
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[UserRole] = mapped_column(

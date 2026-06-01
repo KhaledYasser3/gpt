@@ -1,15 +1,10 @@
-import enum
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
+from app.core.enums import SubscriptionStatus
 from app.models.base import Base
-
-class SubscriptionStatus(str, enum.Enum):
-    ACTIVE = "active"
-    EXPIRED = "expired"
-    SUSPENDED = "suspended"
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
@@ -64,4 +59,7 @@ class Subscription(Base):
     )
 
     # Relationships
-    user = relationship("User", backref="subscriptions")
+    user = relationship(
+        "User", 
+        backref=backref("subscriptions", cascade="all, delete-orphan", passive_deletes=True)
+    )
