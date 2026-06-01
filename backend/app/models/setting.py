@@ -22,14 +22,6 @@ class Setting(Base):
         String(255), 
         nullable=True
     )
-    paypal_email: Mapped[str] = mapped_column(
-        String(255), 
-        nullable=True
-    )
-    vodafone_cash_number: Mapped[str] = mapped_column(
-        String(50), 
-        nullable=True
-    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
         default=lambda: datetime.now(timezone.utc), 
