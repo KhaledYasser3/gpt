@@ -272,4 +272,72 @@ Create an environment with:
 ```text
 base_url = http://127.0.0.1:5000/api/v1
 user_id = paste user.id after create user
+chat_id = paste chat_id after create chat
 ```
+
+## 8. Create Chat
+
+Method: `POST`  
+URL: `{{base_url}}/chats`  
+Headers: `Authorization: Bearer {{access_token}}`
+
+Body:
+```json
+{
+  "title": "My New Chat"
+}
+```
+Expected status: `201 Created`
+
+## 9. Get User Chats
+
+Method: `GET`  
+URL: `{{base_url}}/chats`  
+Headers: `Authorization: Bearer {{access_token}}`
+
+Expected status: `200 OK`
+
+## 10. Send Message to Chat
+
+Method: `POST`  
+URL: `{{base_url}}/chats/{{chat_id}}/messages`  
+Headers: `Authorization: Bearer {{access_token}}`
+
+Body:
+```json
+{
+  "role": "user",
+  "content": "Hello AI!"
+}
+```
+Expected status: `201 Created`
+
+## 11. Get Chat Messages
+
+Method: `GET`  
+URL: `{{base_url}}/chats/{{chat_id}}/messages`  
+Headers: `Authorization: Bearer {{access_token}}`
+
+Expected status: `200 OK`
+
+## 12. Rename Chat
+
+Method: `PUT`  
+URL: `{{base_url}}/chats/{{chat_id}}`  
+Headers: `Authorization: Bearer {{access_token}}`
+
+Body:
+```json
+{
+  "title": "Updated Chat Title"
+}
+```
+Expected status: `200 OK`
+
+## 13. Delete Chat
+
+Method: `DELETE`  
+URL: `{{base_url}}/chats/{{chat_id}}`  
+Headers: `Authorization: Bearer {{access_token}}`
+
+Expected status: `200 OK`
