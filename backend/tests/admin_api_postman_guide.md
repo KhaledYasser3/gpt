@@ -203,6 +203,34 @@ Expected status:
 
 The user and related subscriptions are deleted because the database relationship uses cascade delete.
 
+## 7. Get All Users
+
+Method:
+
+```text
+GET
+```
+
+URL:
+
+```text
+{{base_url}}/admin/users
+```
+
+Body:
+
+```text
+No body
+```
+
+Expected status:
+
+```text
+200 OK
+```
+
+Returns a list of all users and their subscriptions for the admin dashboard.
+
 ## Common Validation Errors
 
 Invalid dates:

@@ -36,3 +36,8 @@ async def add_user_tokens(
     db: AsyncSession = Depends(get_db),
 ):
     return await admin_controller.add_user_tokens(user_id, payload, db)
+
+
+@router.get("")
+async def get_users(db: AsyncSession = Depends(get_db)):
+    return await admin_controller.get_users(db)

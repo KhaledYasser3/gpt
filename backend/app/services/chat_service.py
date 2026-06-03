@@ -53,6 +53,8 @@ async def get_chat_messages(db: AsyncSession, user_id: uuid.UUID, chat_id: uuid.
     )
     return result.scalars().all()
 
+from app.services.ai_service import generate_ai_response
+
 async def create_message(db: AsyncSession, user_id: uuid.UUID, chat_id: uuid.UUID, content: str) -> list[Message]:
     # Ensure user owns the chat
     await get_chat_by_id_for_user(db, user_id, chat_id)
@@ -67,15 +69,46 @@ async def create_message(db: AsyncSession, user_id: uuid.UUID, chat_id: uuid.UUI
         total_tokens=0
     )
     db.add(user_msg)
+    await db.flush()
     
-    # Create Mock Assistant Message
+    # Fetch full chat history for AI context
+    history = await get_chat_messages(db, user_id, chat_id)
+
+    # Fetch subscription and check token limit BEFORE calling AI
+    from app.services.admin_user_service import get_latest_subscription, calculate_usage_percentage
+    from fastapi import HTTPException
+    subscription = await get_latest_subscription(db, user_id)
+    if subscription and subscription.token_limit > 0:
+        if subscription.tokens_used >= subscription.token_limit:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Token limit reached. You have used {subscription.tokens_used}/{subscription.token_limit} tokens. Please contact your administrator."
+            )
+
+    # Call Groq AI API
+    ai_text = await generate_ai_response(history)
+    
+    # Estimate tokens (1 token ~ 4 chars)
+    estimated_input_tokens = sum(len(m.content) for m in history) // 4
+    estimated_output_tokens = len(ai_text) // 4
+    total = estimated_input_tokens + estimated_output_tokens
+
+    # Update user's token usage in subscription
+    if subscription:
+        subscription.tokens_used += total
+        subscription.usage_percentage = calculate_usage_percentage(
+            subscription.tokens_used,
+            subscription.token_limit,
+        )
+
+    # Create AI Message
     assistant_msg = Message(
         chat_id=chat_id,
         role=MessageRole.ASSISTANT,
-        content="Mock AI Response",
-        input_tokens=0,
-        output_tokens=0,
-        total_tokens=0
+        content=ai_text,
+        input_tokens=estimated_input_tokens,
+        output_tokens=estimated_output_tokens,
+        total_tokens=total
     )
     db.add(assistant_msg)
     
@@ -83,4 +116,9 @@ async def create_message(db: AsyncSession, user_id: uuid.UUID, chat_id: uuid.UUI
     await db.refresh(user_msg)
     await db.refresh(assistant_msg)
     
-    return [user_msg, assistant_msg]
+    # Return full chat history
+    # The frontend expects the full list of messages
+    full_history = list(history)
+    full_history.append(assistant_msg)
+    return full_history
+

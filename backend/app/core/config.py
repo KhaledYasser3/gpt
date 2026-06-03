@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
+    # AI API Settings
+    GROQ_API_KEY: str = ""
+    
     # PostgreSQL Configuration
     POSTGRES_SERVER: str = "db"
     POSTGRES_PORT: int = 5432

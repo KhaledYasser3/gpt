@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -37,3 +38,29 @@ async def get_current_user(
         return user
     except admin_user_service.NotFoundError:
         raise credentials_exception
+
+
+async def get_current_active_user(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> User:
+    """Extended check: also blocks users whose token limit is exhausted or subscription expired."""
+    subscription = await admin_user_service.get_latest_subscription(db, user.id)
+    if subscription:
+        # Check subscription expiry date
+        now = datetime.now(timezone.utc)
+        end_date = subscription.end_date
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+        if now > end_date:
+            raise HTTPException(
+                status_code=402,
+                detail="Your subscription has expired. Please contact your administrator."
+            )
+        # Check token limit
+        if subscription.token_limit > 0 and subscription.tokens_used >= subscription.token_limit:
+            raise HTTPException(
+                status_code=402,
+                detail=f"Token limit reached ({subscription.tokens_used}/{subscription.token_limit}). Please contact your administrator."
+            )
+    return user

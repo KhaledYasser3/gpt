@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquarePlus, Search, Folder, Plus, Image as ImageIcon, Edit3, Globe, Mic, AlertCircle, Copy, RotateCw, Trash2, Edit2, Check, X, CheckCircle2, Loader2, MoreHorizontal, Share, Users, Pin, Archive, ArrowUp } from 'lucide-react';
+import { MessageSquarePlus, Search, Folder, Plus, Image as ImageIcon, Edit3, Globe, Mic, AlertCircle, Copy, RotateCw, Check, ArrowUp, MoreHorizontal, Share, Users, Edit2, Pin, Archive, Trash2, StopCircle, PanelLeftClose, PanelLeft, ArrowLeft, LogOut, CheckCircle2, Loader2, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { api } from '../../services/api';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 const CodeBlock = ({ node, inline, className, children, ...props }) => {
@@ -43,16 +44,47 @@ const CodeBlock = ({ node, inline, className, children, ...props }) => {
   );
 };
 
-export default function Chat() {
-  const [showWarning, setShowWarning] = useState(true);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showManageModal, setShowManageModal] = useState(false);
+export default function Chat({ currentUser, onLogout }) {
+  const subscription = currentUser?.subscription;
+  const daysLeft = subscription?.end_date ? Math.ceil((new Date(subscription.end_date) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+  const tokenUsagePercent = subscription?.token_limit ? (subscription.tokens_used / subscription.token_limit) * 100 : 0;
 
+  const isNearingExpiration = daysLeft !== null && daysLeft <= 3;
+  const isTokensLow = tokenUsagePercent >= 90;
+  const shouldShowWarning = isNearingExpiration || isTokensLow;
+
+  const [warningDismissed, setWarningDismissed] = useState(false);
+  const displayWarning = shouldShowWarning && !warningDismissed;
+
+  const warningMessage = isNearingExpiration 
+    ? `Attention : Votre abonnement expire dans ${Math.max(0, daysLeft)} jour(s). Veuillez contacter l'administrateur.`
+    : `Attention : Vous avez utilisé ${Math.round(tokenUsagePercent)}% de votre limite de jetons.`;
+  const [showManageModal, setShowManageModal] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // Dynamic user data
+  const userName = currentUser?.full_name || currentUser?.username || "Utilisateur";
+  const userEmail = currentUser?.email || "utilisateur@example.com";
+  const getInitials = (name) => {
+    if (!name) return 'U';
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const [showProfile, setShowProfile] = useState(false);
   // Chat State
-  const [chats, setChats] = useState([
-    { id: 1, title: 'React UI Design', date: 'Aujourd\'hui' },
-    { id: 2, title: 'Python Web Scraper', date: 'Hier' }
-  ]);
+  const [chats, setChats] = useState([]);
+
+  useEffect(() => {
+    const loadChats = async () => {
+      try {
+        const res = await api.chat.getChats();
+        if (res) setChats(res);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    loadChats();
+  }, []);
   const [activeChatId, setActiveChatId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [botState, setBotState] = useState('idle'); // idle, thinking, searching, generating
@@ -94,14 +126,16 @@ export default function Chat() {
     setBotState('idle');
   };
 
-  const handleSelectChat = (id) => {
+  const handleSelectChat = async (id) => {
     if (botState !== 'idle') return;
     setActiveChatId(id);
-    // Mocking loading previous messages
-    setMessages([
-      { id: Date.now()-1000, role: 'user', content: 'Hello!' },
-      { id: Date.now(), role: 'bot', content: 'Bonjour! Comment puis-je vous aider aujourd\'hui?' }
-    ]);
+    setMessages([]);
+    try {
+      const msgs = await api.chat.getMessages(id);
+      setMessages(msgs || []);
+    } catch(e) {
+      console.error(e);
+    }
   };
 
   const handleDeleteChatPrompt = (e, id) => {
@@ -110,10 +144,15 @@ export default function Chat() {
     setOpenMenuId(null);
   };
 
-  const handleConfirmDelete = () => {
-    setChats(chats.filter(c => c.id !== chatToDelete));
-    if (activeChatId === chatToDelete) handleNewChat();
-    setChatToDelete(null);
+  const handleConfirmDelete = async () => {
+    try {
+      await api.chat.deleteChat(chatToDelete);
+      setChats(chats.filter(c => c.id !== chatToDelete));
+      if (activeChatId === chatToDelete) handleNewChat();
+      setChatToDelete(null);
+    } catch(e) {
+      console.error(e);
+    }
   };
 
   const handlePinChat = (e, id) => {
@@ -204,7 +243,7 @@ export default function Chat() {
   };
 
   // Chat Simulation Logic
-  const submitMessage = (queryText) => {
+  const submitMessage = async (queryText) => {
     if ((!queryText.trim() && attachedFiles.length === 0) || botState !== 'idle') return;
 
     let finalQuery = queryText.trim();
@@ -217,26 +256,34 @@ export default function Chat() {
     setInputValue('');
     setAttachedFiles([]);
     
-    // Create new chat session if none exists
-    if (!activeChatId) {
-      const newChat = { id: Date.now(), title: (queryText.trim() || 'Nouveau chat').slice(0, 25) + '...', date: 'Aujourd\'hui' };
-      setChats([newChat, ...chats]);
-      setActiveChatId(newChat.id);
+    let currentChatId = activeChatId;
+    if (!currentChatId) {
+      try {
+        const newChatTitle = (queryText.trim() || 'Nouveau chat').slice(0, 25) + '...';
+        const createdChat = await api.chat.createChat(newChatTitle);
+        setChats([createdChat, ...chats]);
+        setActiveChatId(createdChat.id);
+        currentChatId = createdChat.id;
+      } catch (e) {
+        console.error(e);
+        return;
+      }
     }
 
     setBotState('thinking');
 
-    // Simulate states
-    setTimeout(() => {
-      // 50% chance to simulate a web search
-      const willSearch = Math.random() > 0.5;
-      if (willSearch) {
-        setBotState('searching');
-        setTimeout(() => startGenerating(finalQuery), 2500);
-      } else {
-        startGenerating(finalQuery);
-      }
-    }, 1500);
+    try {
+      const res = await api.chat.sendMessage(currentChatId, finalQuery);
+      setMessages(res);
+      setBotState('idle');
+    } catch (e) {
+      console.error(e);
+      setBotState('idle');
+      const errorMsg = e.message?.toLowerCase().includes('token limit')
+        ? '⚠️ Limite de jetons atteinte. Contactez votre administrateur pour recharger votre solde.'
+        : 'Erreur lors de la communication avec le serveur.';
+      setMessages(prev => [...prev, { id: Date.now(), role: 'assistant', content: errorMsg }]);
+    }
   };
 
   const handleSubmit = (e) => {
@@ -244,50 +291,16 @@ export default function Chat() {
     submitMessage(inputValue);
   };
 
-  const startGenerating = (query) => {
-    setBotState('generating');
-    const botMsgId = Date.now() + 1;
-    setMessages(prev => [...prev, { id: botMsgId, role: 'bot', content: '' }]);
-
-    const markdownResponse = `Voici une réponse générée pour votre requête : **${query}**.\n\n### Points clés\n- C'est une simulation.\n- L'UI ne change pas.\n- Le Markdown est supporté.\n\nVoici un exemple de code :\n\`\`\`javascript\nfunction greet(name) {\n  console.log(\`Bonjour \${name}!\`);\n}\ngreet("Utilisateur");\n\`\`\`\n\nJ'espère que cela vous aide !`;
-
-    let i = 0;
-    const interval = setInterval(() => {
-      setMessages(prev => prev.map(msg => {
-        if (msg.id === botMsgId) {
-          return { ...msg, content: markdownResponse.slice(0, i + 1) };
-        }
-        return msg;
-      }));
-      i++;
-      if (i >= markdownResponse.length) {
-        clearInterval(interval);
-        setBotState('idle');
-      }
-    }, 15); // streaming speed
-  };
+  // Removed mock startGenerating
 
   const handleRegenerate = () => {
     if (botState !== 'idle' || messages.length === 0) return;
     const lastUserMsg = messages.filter(m => m.role === 'user').pop();
     if (lastUserMsg) {
-      // Remove last bot response
-      setMessages(prev => {
-        const newMsgs = [...prev];
-        if (newMsgs[newMsgs.length - 1].role === 'bot') {
-          newMsgs.pop();
-        }
-        return newMsgs;
-      });
       setInputValue(lastUserMsg.content);
-      // Wait a tick before submit to clear input
       setTimeout(() => {
-        setInputValue('');
-        const newUserMsg = { id: Date.now(), role: 'user', content: lastUserMsg.content };
-        setMessages(prev => [...prev, newUserMsg]);
-        setBotState('thinking');
-        setTimeout(() => startGenerating(lastUserMsg.content), 1000);
-      }, 0);
+        handleSubmit();
+      }, 100);
     }
   };
 
@@ -415,21 +428,21 @@ export default function Chat() {
         </div>
 
         {/* Profile Menu Bottom */}
-        <div style={{ position: 'relative', marginTop: 'auto' }}>
+        <div style={{ position: 'relative', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
           
           {/* Profile Modal Popover */}
           {showProfile && (
-            <div style={{ position: 'absolute', bottom: 70, left: 16, backgroundColor: '#2f2f2f', padding: 20, borderRadius: 12, width: 300, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 100, border: '1px solid #444' }}>
+            <div style={{ position: 'absolute', bottom: 120, left: 16, backgroundColor: '#2f2f2f', padding: 20, borderRadius: 12, width: 300, boxShadow: '0 10px 30px rgba(0,0,0,0.5)', zIndex: 100, border: '1px solid #444' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 'bold' }}>KY</div>
-                <div>
-                  <div style={{ fontSize: 16, fontWeight: 600 }}>Nom de l'utilisateur</div>
-                  <div style={{ fontSize: 13, color: '#b4b4b4' }}>user@gmail.com</div>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 'bold' }}>{getInitials(userName)}</div>
+                <div style={{ overflow: 'hidden' }}>
+                  <div style={{ fontSize: 16, fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{userName}</div>
+                  <div style={{ fontSize: 13, color: '#b4b4b4', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{userEmail}</div>
                 </div>
               </div>
               <div style={{ backgroundColor: '#1c1c1c', padding: 12, borderRadius: 8, marginBottom: 16 }}>
                 <div style={{ fontSize: 12, color: '#b4b4b4', marginBottom: 4 }}>Type d'abonnement</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#e8a87c' }}>GPT Business</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#e8a87c' }}>Abonnement Pro</div>
               </div>
               <button 
                 style={{ width: '100%', padding: '10px', backgroundColor: 'var(--admin-accent)', border: 'none', color: '#000', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }} 
@@ -443,16 +456,23 @@ export default function Chat() {
             </div>
           )}
 
-          <div style={{ padding: 16, borderTop: '1px solid #333' }}>
-            <div onClick={() => setShowProfile(!showProfile)} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+          <div style={{ padding: '0 16px 8px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div onClick={() => setShowProfile(!showProfile)} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '12px', backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12 }}>
               <div style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 'bold' }}>
-                KY
+                {getInitials(userName)}
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>Nom de l'utilisateur...</div>
-                <div style={{ fontSize: 12, color: '#b4b4b4' }}>GPT Business</div>
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <div style={{ fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{userName}</div>
+                <div style={{ fontSize: 12, color: '#b4b4b4' }}>Abonnement Pro</div>
               </div>
             </div>
+
+            <button 
+              onClick={() => setShowLogoutConfirm(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px', background: 'transparent', border: '1px solid #333', color: '#ef4444', borderRadius: 12, cursor: 'pointer', fontWeight: 500, justifyContent: 'center' }}
+            >
+              <LogOut size={16} /> Déconnexion
+            </button>
           </div>
         </div>
       </div>
@@ -473,13 +493,16 @@ export default function Chat() {
           </div>
         )}
         
-
-        {/* Warning Banner */}
-        {showWarning && (
-          <div style={{ backgroundColor: '#f59e0b', color: '#000', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 500 }}>
-            <AlertCircle size={18} />
-            Attention : Votre abonnement expire dans 3 jours. Veuillez contacter l'administrateur pour le renouveler.
-            <button onClick={() => setShowWarning(false)} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>✕</button>
+        {/* Expiration Warning */}
+        {displayWarning && (
+          <div style={{ backgroundColor: '#f59e0b', color: '#000', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: 500, fontSize: 13, zIndex: 100 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertCircle size={16} />
+              <span>{warningMessage}</span>
+            </div>
+            <button onClick={() => setWarningDismissed(true)} style={{ background: 'none', border: 'none', color: '#000', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <X size={16} />
+            </button>
           </div>
         )}
 
@@ -590,7 +613,7 @@ export default function Chat() {
                     lineHeight: '1.6',
                     color: '#ececec'
                   }}>
-                    {msg.role === 'bot' ? (
+                    {msg.role === 'assistant' ? (
                       <ReactMarkdown 
                         remarkPlugins={[remarkGfm]}
                         components={{ code: CodeBlock }}
@@ -603,7 +626,7 @@ export default function Chat() {
                   </div>
                   
                   {/* Bot Message Actions */}
-                  {msg.role === 'bot' && botState === 'idle' && index === messages.length - 1 && (
+                  {msg.role === 'assistant' && botState === 'idle' && index === messages.length - 1 && (
                     <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingLeft: 12 }}>
                       <button onClick={() => copyToClipboard(msg.content)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 12 }}><Copy size={14}/> Copy</button>
                       <button onClick={handleRegenerate} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: 12 }}><RotateCw size={14}/> Regenerate</button>
@@ -740,6 +763,21 @@ export default function Chat() {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button onClick={() => setChatToDelete(null)} style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#ececec', border: 'none', cursor: 'pointer' }}>Annuler</button>
               <button onClick={handleConfirmDelete} style={{ padding: '8px 16px', backgroundColor: '#ef4444', color: '#fff', fontWeight: 'bold', border: 'none', borderRadius: 6, cursor: 'pointer' }}>Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLogoutConfirm && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+          <div style={{ backgroundColor: '#111', border: '1px solid #333', padding: 32, borderRadius: 16, width: 380, textAlign: 'center', color: '#fff', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>Déconnexion</h2>
+            <p style={{ color: '#a3a3a3', fontSize: 14, marginBottom: 24 }}>
+              Êtes-vous sûr de vouloir vous déconnecter ?
+            </p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => setShowLogoutConfirm(false)} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid #333', color: '#fff', borderRadius: 8, cursor: 'pointer', fontWeight: 500 }}>Annuler</button>
+              <button onClick={() => { setShowLogoutConfirm(false); onLogout(); }} style={{ flex: 1, padding: '12px', background: '#ef4444', border: 'none', color: '#fff', borderRadius: 8, cursor: 'pointer', fontWeight: 600 }}>Oui, déconnecter</button>
             </div>
           </div>
         </div>

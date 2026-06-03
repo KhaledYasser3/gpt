@@ -1,7 +1,36 @@
-import React from 'react';
-import { Mail, Lock, KeyRound } from 'lucide-react';
+import React, { useState } from 'react';
+import { Mail, Lock, KeyRound, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { api } from '../../services/api';
 
 export default function Auth({ onLogin }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setError('Veuillez remplir tous les champs.');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+
+    try {
+      const response = await api.auth.login(email, password);
+      if (response && response.user) {
+        onLogin(response);
+      }
+    } catch (err) {
+      setError(err.message || 'Erreur lors de la connexion. Veuillez vérifier vos identifiants.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#111', color: '#fff', fontFamily: 'Inter, sans-serif' }}>
       
@@ -17,13 +46,22 @@ export default function Auth({ onLogin }) {
       <div style={{ backgroundColor: '#1c1c1c', padding: '40px', borderRadius: 16, width: '100%', maxWidth: 420, boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
         <h2 style={{ fontSize: 24, fontWeight: 600, marginBottom: 32 }}>Bon retour</h2>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {error && (
+          <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444', padding: '12px', borderRadius: 8, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+            <AlertCircle size={16} />
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Email */}
           <div>
             <label style={{ display: 'block', fontSize: 14, color: '#a3a3a3', marginBottom: 8 }}>Adresse e-mail</label>
             <input 
               type="email" 
-              placeholder="name@company.com" 
+              placeholder="name@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               style={{ width: '100%', padding: '12px 16px', borderRadius: 8, backgroundColor: '#000', border: '1px solid #333', color: '#fff', fontSize: 15, outline: 'none' }}
             />
           </div>
@@ -36,22 +74,31 @@ export default function Auth({ onLogin }) {
             </div>
             <div style={{ position: 'relative' }}>
               <input 
-                type="password" 
+                type={showPassword ? "text" : "password"} 
                 placeholder="••••••••" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 style={{ width: '100%', padding: '12px 16px', borderRadius: 8, backgroundColor: '#000', border: '1px solid #333', color: '#fff', fontSize: 15, outline: 'none' }}
               />
-              <KeyRound size={16} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)}
+                style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#666', cursor: 'pointer', display: 'flex', padding: 0 }}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
           </div>
 
           {/* Login Button */}
           <button 
-            onClick={onLogin}
-            style={{ width: '100%', padding: '12px', borderRadius: 8, backgroundColor: '#fff', color: '#000', fontSize: 16, fontWeight: 600, border: 'none', cursor: 'pointer', marginTop: 10 }}
+            type="submit"
+            disabled={loading}
+            style={{ width: '100%', padding: '12px', borderRadius: 8, backgroundColor: '#fff', color: '#000', fontSize: 16, fontWeight: 600, border: 'none', cursor: loading ? 'not-allowed' : 'pointer', marginTop: 10, opacity: loading ? 0.7 : 1 }}
           >
-            Se connecter
+            {loading ? 'Connexion en cours...' : 'Se connecter'}
           </button>
-        </div>
+        </form>
 
         {/* OR Divider */}
         <div style={{ display: 'flex', alignItems: 'center', margin: '24px 0', color: '#666', fontSize: 12 }}>

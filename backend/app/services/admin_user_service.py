@@ -169,3 +169,13 @@ async def login_user(db: AsyncSession, *, email: str, password: str) -> tuple[Us
     if not user.is_active:
         raise UnauthorizedError("User account is inactive.")
     return user, await get_latest_subscription(db, user.id)
+
+
+async def get_all_users(db: AsyncSession) -> list[tuple[User, Optional[Subscription]]]:
+    result = await db.execute(select(User).order_by(User.created_at.desc()))
+    users = result.scalars().all()
+    user_subs = []
+    for user in users:
+        sub = await get_latest_subscription(db, user.id)
+        user_subs.append((user, sub))
+    return user_subs

@@ -138,3 +138,16 @@ async def add_user_tokens(
         "message": "Tokens added successfully.",
         "user": user_json(user, subscription),
     }
+
+
+async def get_users(db: AsyncSession):
+    try:
+        user_subs = await admin_user_service.get_all_users(db)
+    except admin_user_service.ServiceError as exc:
+        raise service_error_to_http(exc) from exc
+
+    return {
+        "action": "LIST_USERS",
+        "message": "Users retrieved successfully.",
+        "users": [user_json(user, sub) for user, sub in user_subs],
+    }
