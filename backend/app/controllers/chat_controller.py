@@ -11,13 +11,13 @@ def service_error_to_http(error: ServiceError) -> HTTPException:
 
 async def create_chat(user_id: uuid.UUID, payload: ChatCreate, db: AsyncSession):
     try:
-        return await chat_service.create_chat(db, user_id=user_id, title=payload.title)
+        return await chat_service.create_chat(db, user_id=user_id, title=payload.title, project_id=payload.project_id)
     except ServiceError as exc:
         raise service_error_to_http(exc) from exc
 
-async def get_user_chats(user_id: uuid.UUID, db: AsyncSession):
+async def get_user_chats(user_id: uuid.UUID, db: AsyncSession, project_id: uuid.UUID = None):
     try:
-        return await chat_service.get_user_chats(db, user_id=user_id)
+        return await chat_service.get_user_chats(db, user_id=user_id, project_id=project_id)
     except ServiceError as exc:
         raise service_error_to_http(exc) from exc
 
@@ -41,8 +41,12 @@ async def get_chat_messages(user_id: uuid.UUID, chat_id: uuid.UUID, db: AsyncSes
     except ServiceError as exc:
         raise service_error_to_http(exc) from exc
 
-async def add_message(user_id: uuid.UUID, chat_id: uuid.UUID, payload: MessageCreate, db: AsyncSession):
+from fastapi import BackgroundTasks, UploadFile
+from typing import List, Optional
+
+async def add_message(user_id: uuid.UUID, chat_id: uuid.UUID, content: str, files: Optional[List[UploadFile]], background_tasks: BackgroundTasks, db: AsyncSession):
     try:
-        return await chat_service.create_message(db, user_id=user_id, chat_id=chat_id, content=payload.content)
+        return await chat_service.create_message(db, user_id=user_id, chat_id=chat_id, content=content, files=files, background_tasks=background_tasks)
     except ServiceError as exc:
         raise service_error_to_http(exc) from exc
+

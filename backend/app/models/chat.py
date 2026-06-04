@@ -19,9 +19,18 @@ class Chat(Base):
         ForeignKey("users.id", ondelete="CASCADE"), 
         nullable=False
     )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=True
+    )
     title: Mapped[str] = mapped_column(
         String(255), 
         nullable=False
+    )
+    summary: Mapped[str] = mapped_column(
+        String,
+        nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
@@ -37,6 +46,7 @@ class Chat(Base):
 
     # Relationships
     user = relationship("User", backref="chats")
+    project = relationship("Project", backref="chats")
 
 
 class Message(Base):

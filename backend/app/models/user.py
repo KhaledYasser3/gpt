@@ -23,6 +23,10 @@ class User(Base):
         default=UserRole.USER, 
         nullable=False
     )
+    interests_summary: Mapped[str] = mapped_column(
+        String,
+        nullable=True
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 

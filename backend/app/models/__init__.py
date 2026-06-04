@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.subscription import Subscription
 from app.models.chat import Chat, Message, UsageLog
 from app.models.setting import Setting
+from app.models.project import Project
 
 __all__ = [
     "Base",
@@ -16,5 +17,6 @@ __all__ = [
     "Message",
     "UsageLog",
     "MessageRole",
-    "Setting"
+    "Setting",
+    "Project"
 ]

@@ -22,10 +22,11 @@ async def create_chat(
 
 @router.get("", response_model=List[ChatResponse])
 async def get_chats(
+    project_id: uuid.UUID = None,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    return await chat_controller.get_user_chats(current_user.id, db)
+    return await chat_controller.get_user_chats(current_user.id, db, project_id)
 
 @router.put("/{chat_id}", response_model=ChatResponse)
 async def rename_chat(
@@ -52,11 +53,17 @@ async def get_chat_messages(
 ):
     return await chat_controller.get_chat_messages(current_user.id, chat_id, db)
 
+from fastapi import BackgroundTasks, UploadFile, File, Form
+from typing import Optional
+
 @router.post("/{chat_id}/messages", response_model=List[MessageResponse], status_code=status.HTTP_201_CREATED)
 async def add_message(
     chat_id: uuid.UUID,
-    payload: MessageCreate,
+    background_tasks: BackgroundTasks,
+    content: str = Form(...),
+    files: Optional[List[UploadFile]] = File(None),
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    return await chat_controller.add_message(current_user.id, chat_id, payload, db)
+    return await chat_controller.add_message(current_user.id, chat_id, content, files, background_tasks, db)
+

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquarePlus, Search, Folder, Plus, Image as ImageIcon, Edit3, Globe, Mic, AlertCircle, Copy, RotateCw, Check, ArrowUp, MoreHorizontal, Share, Users, Edit2, Pin, Archive, Trash2, StopCircle, PanelLeftClose, PanelLeft, ArrowLeft, LogOut, CheckCircle2, Loader2, X } from 'lucide-react';
+import { MessageSquarePlus, Search, Folder, Plus, Image as ImageIcon, Edit3, Globe, Mic, AlertCircle, Copy, RotateCw, Check, ArrowUp, MoreHorizontal, Share, Users, Edit2, Pin, Archive, Trash2, StopCircle, PanelLeftClose, PanelLeft, ArrowLeft, LogOut, CheckCircle2, Loader2, X, ChevronDown, ChevronLeft, ChevronRight, Headphones, Monitor, TrendingUp, AudioLines } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -42,6 +42,75 @@ const CodeBlock = ({ node, inline, className, children, ...props }) => {
       {children}
     </code>
   );
+};
+
+const MarkdownComponents = {
+  code: CodeBlock,
+  h1: ({ children }) => (
+    <h1 style={{ fontSize: 30, lineHeight: 1.2, margin: '4px 0 18px', fontWeight: 750, color: '#f5f5f5' }}>
+      {children}
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2 style={{ fontSize: 23, lineHeight: 1.3, margin: '34px 0 14px', paddingBottom: 8, borderBottom: '1px solid #343434', fontWeight: 720, color: '#f1f1f1' }}>
+      {children}
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3 style={{ fontSize: 19, lineHeight: 1.35, margin: '24px 0 10px', fontWeight: 700, color: '#ffffff' }}>
+      {children}
+    </h3>
+  ),
+  p: ({ children }) => (
+    <p style={{ margin: '8px 0 14px', lineHeight: 1.75, color: '#e6e6e6' }}>
+      {children}
+    </p>
+  ),
+  ul: ({ children }) => (
+    <ul style={{ margin: '8px 0 18px', paddingLeft: 24, display: 'grid', gap: 7 }}>
+      {children}
+    </ul>
+  ),
+  ol: ({ children }) => (
+    <ol style={{ margin: '8px 0 18px', paddingLeft: 24, display: 'grid', gap: 7 }}>
+      {children}
+    </ol>
+  ),
+  li: ({ children }) => (
+    <li style={{ lineHeight: 1.7, paddingLeft: 4, color: '#e8e8e8' }}>
+      {children}
+    </li>
+  ),
+  hr: () => (
+    <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, #3a3a3a, transparent)', margin: '22px 0' }} />
+  ),
+  blockquote: ({ children }) => (
+    <blockquote style={{ margin: '16px 0', padding: '12px 16px', borderLeft: '3px solid #7c7c7c', backgroundColor: '#242424', borderRadius: 8, color: '#e8e8e8' }}>
+      {children}
+    </blockquote>
+  ),
+  table: ({ children }) => (
+    <div style={{ overflowX: 'auto', margin: '18px 0', border: '1px solid #3c3c3c', borderRadius: 8 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+        {children}
+      </table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th style={{ padding: '10px 12px', borderBottom: '1px solid #444', backgroundColor: '#2b2b2b', textAlign: 'left', fontWeight: 700 }}>
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td style={{ padding: '10px 12px', borderBottom: '1px solid #333', verticalAlign: 'top' }}>
+      {children}
+    </td>
+  ),
+  strong: ({ children }) => (
+    <strong style={{ color: '#ffffff', fontWeight: 750 }}>
+      {children}
+    </strong>
+  )
 };
 
 export default function Chat({ currentUser, onLogout }) {
@@ -103,6 +172,24 @@ export default function Chat({ currentUser, onLogout }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [showAspectRatioMenu, setShowAspectRatioMenu] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState('Auto');
+  const [activeMode, setActiveMode] = useState('default');
+
+  // Projects state
+  const [showProjects, setShowProjects] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [projectsTab, setProjectsTab] = useState('all');
+  const [projectSearch, setProjectSearch] = useState('');
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+  const [editingProjectName, setEditingProjectName] = useState('');
+  const [activeProject, setActiveProject] = useState(null);
+  const [projectChats, setProjectChats] = useState([]);
+  const [projectChatsLoading, setProjectChatsLoading] = useState(false);
 
   const messagesEndRef = useRef(null);
 
@@ -124,10 +211,99 @@ export default function Chat({ currentUser, onLogout }) {
     setActiveChatId(null);
     setMessages([]);
     setBotState('idle');
+    setShowProjects(false);
+    setActiveProject(null);
+  };
+
+  const handleOpenProjects = async () => {
+    setShowProjects(true);
+    setProjectsLoading(true);
+    try {
+      const res = await api.projects.getProjects();
+      setProjects(res || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim()) return;
+    try {
+      if (!api.projects) {
+        alert("Erreur système: api.projects est introuvable. Veuillez recharger la page (F5).");
+        return;
+      }
+      const res = await api.projects.createProject(newProjectName.trim(), newProjectDesc.trim());
+      setProjects(prev => [res, ...prev]);
+      setNewProjectName('');
+      setNewProjectDesc('');
+      setShowNewProjectModal(false);
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la création du projet: " + (e.message || "Erreur inconnue"));
+    }
+  };
+
+  const handleDeleteProject = async (projectId) => {
+    try {
+      await api.projects.deleteProject(projectId);
+      setProjects(prev => prev.filter(p => p.id !== projectId));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleSaveProjectRename = async (projectId) => {
+    if (!editingProjectName.trim()) return;
+    try {
+      const res = await api.projects.updateProject(projectId, editingProjectName.trim());
+      setProjects(prev => prev.map(p => p.id === projectId ? res : p));
+      setEditingProject(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleProjectClick = async (project) => {
+    setActiveProject(project);
+    setShowProjects(false);
+    setProjectChatsLoading(true);
+    try {
+      const res = await api.chat.getChats(project.id);
+      setProjectChats(res || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setProjectChatsLoading(false);
+    }
+  };
+
+  const handleCreateProjectChat = async (e) => {
+    e.preventDefault();
+    if (!inputValue.trim() || !activeProject) return;
+    const msg = inputValue;
+    setInputValue('');
+    setBotState('thinking');
+    
+    try {
+      const chatRes = await api.chat.createChat(msg.substring(0, 30), activeProject.id);
+      setActiveChatId(chatRes.id);
+      setProjectChats(prev => [chatRes, ...prev]);
+      
+      const res = await api.chat.sendMessage(chatRes.id, msg);
+      setMessages(res || []);
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setBotState('idle');
+    }
   };
 
   const handleSelectChat = async (id) => {
     if (botState !== 'idle') return;
+    setShowProjects(false);
     setActiveChatId(id);
     setMessages([]);
     try {
@@ -260,8 +436,12 @@ export default function Chat({ currentUser, onLogout }) {
     if (!currentChatId) {
       try {
         const newChatTitle = (queryText.trim() || 'Nouveau chat').slice(0, 25) + '...';
-        const createdChat = await api.chat.createChat(newChatTitle);
-        setChats([createdChat, ...chats]);
+        const createdChat = await api.chat.createChat(newChatTitle, activeProject ? activeProject.id : null);
+        if (!activeProject) {
+          setChats([createdChat, ...chats]);
+        } else {
+          setProjectChats(prev => [createdChat, ...prev]);
+        }
         setActiveChatId(createdChat.id);
         currentChatId = createdChat.id;
       } catch (e) {
@@ -344,8 +524,11 @@ export default function Chat({ currentUser, onLogout }) {
               style={{ background: 'transparent', border: 'none', color: '#ececec', outline: 'none', width: '100%' }}
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', color: '#ececec', fontSize: 13, cursor: 'pointer', marginTop: 8 }}>
-            <Folder size={16} /> Projects
+          <div
+            onClick={handleOpenProjects}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', color: showProjects ? '#ececec' : '#b4b4b4', fontSize: 13, cursor: 'pointer', marginTop: 8, borderRadius: 8, backgroundColor: showProjects ? '#2f2f2f' : 'transparent' }}
+          >
+            <Folder size={16} /> Projets
           </div>
         </div>
 
@@ -508,18 +691,239 @@ export default function Chat({ currentUser, onLogout }) {
 
         {/* Top Navbar */}
         <div style={{ padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 16, fontWeight: 600, color: '#ececec', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-            ChatGPT <span style={{ fontSize: 12, color: '#b4b4b4' }}>▼</span>
+          <div style={{ fontSize: 16, fontWeight: 600, color: '#ececec', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            {activeProject && activeChatId ? (
+              <button
+                onClick={() => { setActiveChatId(null); setMessages([]); }}
+                style={{ background: 'none', border: 'none', color: '#b4b4b4', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 500 }}
+              >
+                <ChevronLeft size={18} /> {activeProject.name}
+              </button>
+            ) : (
+              <>ChatGPT <span style={{ fontSize: 12, color: '#b4b4b4' }}>▼</span></>
+            )}
           </div>
         </div>
 
+        {/* Projects View */}
+        {showProjects ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: '40px 60px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+              <h1 style={{ fontSize: 28, fontWeight: 700, color: '#ececec', margin: 0 }}>Projets</h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: '#2f2f2f', borderRadius: 999, padding: '8px 16px', border: '1px solid #444' }}>
+                  <Search size={14} color="#b4b4b4" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher des projets"
+                    value={projectSearch}
+                    onChange={e => setProjectSearch(e.target.value)}
+                    style={{ background: 'transparent', border: 'none', color: '#ececec', outline: 'none', fontSize: 14, width: 180 }}
+                  />
+                </div>
+                <button
+                  onClick={() => setShowNewProjectModal(true)}
+                  style={{ padding: '8px 20px', backgroundColor: '#fff', color: '#000', border: 'none', borderRadius: 999, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Nouveau
+                </button>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '1px solid #333', paddingBottom: 0 }}>
+              {[{ key: 'all', label: 'Tous' }, { key: 'mine', label: 'Créés par vous' }, { key: 'shared', label: 'Partagés avec vous' }].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setProjectsTab(tab.key)}
+                  style={{
+                    padding: '8px 16px', background: 'none', border: 'none',
+                    color: projectsTab === tab.key ? '#ececec' : '#b4b4b4',
+                    fontSize: 14, cursor: 'pointer', fontWeight: projectsTab === tab.key ? 600 : 400,
+                    borderBottom: projectsTab === tab.key ? '2px solid #ececec' : '2px solid transparent',
+                    marginBottom: -1
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Table */}
+            {projectsLoading ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, color: '#b4b4b4' }}>
+                <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px', padding: '8px 16px', color: '#b4b4b4', fontSize: 13, fontWeight: 500, borderBottom: '1px solid #333', marginBottom: 4 }}>
+                  <span>Nom</span>
+                  <span>Modifié</span>
+                  <span></span>
+                </div>
+                {projects
+                  .filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase()))
+                  .map(project => (
+                  <div
+                    key={project.id}
+                    onClick={() => handleProjectClick(project)}
+                    style={{ display: 'grid', gridTemplateColumns: '1fr 160px 120px', padding: '12px 16px', borderRadius: 8, alignItems: 'center', cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#2f2f2f'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 32, height: 32, backgroundColor: '#444', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Folder size={16} color="#ececec" />
+                      </div>
+                      {editingProject === project.id ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            value={editingProjectName}
+                            onChange={e => setEditingProjectName(e.target.value)}
+                            autoFocus
+                            onKeyDown={e => { if (e.key === 'Enter') handleSaveProjectRename(project.id); if (e.key === 'Escape') setEditingProject(null); }}
+                            style={{ background: '#1c1c1c', border: '1px solid #444', color: '#fff', padding: '4px 8px', borderRadius: 4, outline: 'none', fontSize: 14 }}
+                          />
+                          <button onClick={() => handleSaveProjectRename(project.id)} style={{ background: 'none', border: 'none', color: '#10b981', cursor: 'pointer', padding: 0 }}><Check size={16} /></button>
+                          <button onClick={() => setEditingProject(null)} style={{ background: 'none', border: 'none', color: '#b4b4b4', cursor: 'pointer', padding: 0 }}><X size={16} /></button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 14, color: '#ececec', fontWeight: 500 }}>{project.name}</span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 13, color: '#b4b4b4' }}>
+                      {new Date(project.updated_at).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' })}
+                    </span>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingProject(project.id); setEditingProjectName(project.name); }}
+                        style={{ background: 'none', border: 'none', color: '#b4b4b4', cursor: 'pointer', padding: 4, borderRadius: 4 }}
+                        title="Renommer"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id); }}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4, borderRadius: 4 }}
+                        title="Supprimer"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {projects.filter(p => p.name.toLowerCase().includes(projectSearch.toLowerCase())).length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '60px 0', color: '#b4b4b4' }}>
+                    <Folder size={40} style={{ marginBottom: 16, opacity: 0.4 }} />
+                    <div style={{ fontSize: 16, marginBottom: 8 }}>Aucun projet trouvé</div>
+                    <div style={{ fontSize: 13 }}>Créez votre premier projet en cliquant sur "Nouveau"</div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* New Project Modal */}
+            {showNewProjectModal && (
+              <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ backgroundColor: '#2f2f2f', borderRadius: 16, padding: 32, width: 420, border: '1px solid #444', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+                  <h2 style={{ margin: '0 0 24px 0', fontSize: 20, fontWeight: 600 }}>Nouveau projet</h2>
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', fontSize: 13, color: '#b4b4b4', marginBottom: 8 }}>Nom du projet *</label>
+                    <input
+                      type="text"
+                      value={newProjectName}
+                      onChange={e => setNewProjectName(e.target.value)}
+                      placeholder="Mon projet"
+                      autoFocus
+                      onKeyDown={e => e.key === 'Enter' && handleCreateProject()}
+                      style={{ width: '100%', backgroundColor: '#1c1c1c', border: '1px solid #444', color: '#fff', padding: '10px 12px', borderRadius: 8, outline: 'none', fontSize: 14, boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 24 }}>
+                    <label style={{ display: 'block', fontSize: 13, color: '#b4b4b4', marginBottom: 8 }}>Description (optionnel)</label>
+                    <textarea
+                      value={newProjectDesc}
+                      onChange={e => setNewProjectDesc(e.target.value)}
+                      placeholder="Description du projet..."
+                      rows={3}
+                      style={{ width: '100%', backgroundColor: '#1c1c1c', border: '1px solid #444', color: '#fff', padding: '10px 12px', borderRadius: 8, outline: 'none', fontSize: 14, resize: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                    <button onClick={() => setShowNewProjectModal(false)} style={{ padding: '10px 20px', background: 'transparent', border: '1px solid #444', color: '#ececec', borderRadius: 8, cursor: 'pointer', fontSize: 14 }}>
+                      Annuler
+                    </button>
+                    <button onClick={handleCreateProject} disabled={!newProjectName.trim()} style={{ padding: '10px 20px', backgroundColor: newProjectName.trim() ? '#fff' : '#555', color: newProjectName.trim() ? '#000' : '#888', border: 'none', borderRadius: 8, cursor: newProjectName.trim() ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 600 }}>
+                      Créer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {/* Project Details View */}
+        {!showProjects && activeProject && !activeChatId ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', overflowY: 'auto', padding: '40px 60px' }}>
+            <div style={{ width: '100%', maxWidth: 720 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 32 }}>
+                <Folder size={32} color="#ececec" />
+                <h1 style={{ fontSize: 28, fontWeight: 700, color: '#ececec', margin: 0 }}>{activeProject.name}</h1>
+              </div>
+
+              <form onSubmit={handleCreateProjectChat} style={{ backgroundColor: '#2f2f2f', borderRadius: 24, padding: '12px 16px', display: 'flex', gap: 12, border: '1px solid #444', alignItems: 'center', marginBottom: 24 }}>
+                <Plus size={20} color="#b4b4b4" style={{ cursor: 'pointer' }} />
+                <input 
+                  type="text" 
+                  value={inputValue}
+                  onChange={e => setInputValue(e.target.value)}
+                  placeholder={`Nouveau chat dans ${activeProject.name}`}
+                  style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', fontSize: 16, outline: 'none' }}
+                  disabled={botState !== 'idle'}
+                />
+                <button type="button" style={{ background: 'transparent', border: 'none', color: '#b4b4b4', cursor: 'pointer', display: 'flex', padding: 6 }}>
+                  <Mic size={20} />
+                </button>
+                <button type="submit" disabled={!inputValue.trim() || botState !== 'idle'} style={{ background: botState !== 'idle' || !inputValue.trim() ? '#666' : '#fff', border: 'none', color: '#000', cursor: botState !== 'idle' || !inputValue.trim() ? 'not-allowed' : 'pointer', display: 'flex', padding: 6, borderRadius: '50%' }}>
+                  <AudioLines size={18} strokeWidth={2.5} />
+                </button>
+              </form>
+
+              <div style={{ display: 'flex', gap: 16, borderBottom: '1px solid #333', marginBottom: 24 }}>
+                <button style={{ padding: '8px 0', background: 'none', border: 'none', color: '#ececec', fontSize: 14, fontWeight: 600, borderBottom: '2px solid #ececec', cursor: 'pointer' }}>Chats</button>
+                <button style={{ padding: '8px 0', background: 'none', border: 'none', color: '#b4b4b4', fontSize: 14, cursor: 'pointer' }}>Sources</button>
+              </div>
+
+              {projectChatsLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 40, color: '#b4b4b4' }}>
+                  <Loader2 size={24} style={{ animation: 'spin 1s linear infinite' }} />
+                </div>
+              ) : projectChats.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {projectChats.map(chat => (
+                    <div key={chat.id} onClick={() => handleSelectChat(chat.id)} style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 0', borderBottom: '1px solid #333', cursor: 'pointer' }}>
+                      <span style={{ fontSize: 15, color: '#ececec', fontWeight: 500 }}>{chat.title}</span>
+                      <span style={{ fontSize: 13, color: '#b4b4b4' }}>{new Date(chat.created_at).toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' })}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ color: '#b4b4b4', textAlign: 'center', padding: '40px 0' }}>Aucun chat dans ce projet.</div>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         {/* Dynamic Chat Area */}
-        {messages.length === 0 ? (
+        {!showProjects && (activeChatId || !activeProject) ? (
+          messages.length === 0 && !activeChatId ? (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 24px' }}>
             <h2 style={{ fontSize: 28, fontWeight: 600, marginBottom: 40 }}>Où commence-t-on ?</h2>
             <div style={{ width: '100%', maxWidth: 720 }}>
               <div style={{ position: 'relative' }}>
-                <form onSubmit={handleSubmit} style={{ backgroundColor: 'var(--user-input-bg)', borderRadius: 24, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, border: '1px solid #444', flexWrap: 'wrap' }}>
+                <form onSubmit={handleSubmit} style={{ backgroundColor: activeMode === 'default' || activeMode === 'write' ? '#2f2f2f' : '#2f2f2f', borderRadius: 24, padding: '12px 16px', display: 'flex', flexDirection: activeMode === 'default' || activeMode === 'write' ? 'row' : 'column', gap: 12, border: '1px solid #444', flexWrap: 'wrap', alignItems: activeMode === 'default' || activeMode === 'write' ? 'center' : 'stretch' }}>
                   {attachedFiles.length > 0 && (
                     <div style={{ width: '100%', display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
                       {attachedFiles.map((f, i) => (
@@ -530,49 +934,151 @@ export default function Chat({ currentUser, onLogout }) {
                       ))}
                     </div>
                   )}
-                  <button type="button" onClick={handleAttachClick} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex' }}><Plus size={20} /></button>
-                  {isRecording ? (
+
+                  {/* Input Row for Default & Write modes */}
+                  {(activeMode === 'default' || activeMode === 'write') && (
                     <>
-                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 12, overflow: 'hidden' }}>
-                        <div style={{ color: '#555', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', fontSize: 20, letterSpacing: 2, userSelect: 'none' }}>
-                          ........................................................................
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '0 12px' }}>
-                          {[...Array(12)].map((_, i) => (
-                            <div key={i} className="waveform-bar" style={{ animationDelay: `${i * 0.05}s`, height: i % 2 === 0 ? '12px' : '8px' }}></div>
-                          ))}
-                        </div>
-                      </div>
-                      <button type="button" onClick={handleCancelRecord} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 8 }}>
-                        <X size={20} />
-                      </button>
-                      <button type="button" onClick={handleSendRecord} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 8 }}>
-                        <Check size={20} />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <input 
-                        type="text" 
-                        value={inputValue}
-                        onChange={e => setInputValue(e.target.value)}
-                        placeholder="Demander n'importe quoi" 
-                        style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', fontSize: 16, outline: 'none' }}
-                        disabled={botState !== 'idle'}
-                      />
-                      {inputValue.trim() || attachedFiles.length > 0 ? (
-                        <button type="submit" disabled={botState !== 'idle'} style={{ background: botState !== 'idle' ? '#666' : '#fff', border: 'none', color: '#000', cursor: botState !== 'idle' ? 'not-allowed' : 'pointer', display: 'flex', padding: 6, borderRadius: '50%' }}>
-                          <ArrowUp size={16} strokeWidth={3} />
+                      {activeMode === 'write' ? (
+                        <button type="button" onClick={() => setActiveMode('default')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', backgroundColor: '#2f425c', color: '#93c5fd', border: 'none', borderRadius: 999, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                          <X size={14} /> Écrire
                         </button>
                       ) : (
-                        <button type="button" onClick={handleMicClick} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 6 }}>
-                          <Mic size={20} />
-                        </button>
+                        <button type="button" onClick={handleAttachClick} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex' }}><Plus size={20} /></button>
+                      )}
+                      
+                      {isRecording ? (
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 12, overflow: 'hidden' }}>
+                          <div style={{ color: '#555', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', fontSize: 20, letterSpacing: 2, userSelect: 'none' }}>
+                            ........................................................................
+                          </div>
+                          <button type="button" onClick={handleCancelRecord} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 8 }}>
+                            <X size={20} />
+                          </button>
+                          <button type="button" onClick={handleSendRecord} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 8 }}>
+                            <Check size={20} />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <input 
+                            type="text" 
+                            value={inputValue}
+                            onChange={e => setInputValue(e.target.value)}
+                            placeholder={activeMode === 'write' ? "Écrire n'importe quoi" : "Demander n'importe quoi"}
+                            style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', fontSize: 16, outline: 'none' }}
+                            disabled={botState !== 'idle'}
+                          />
+                          {inputValue.trim() || attachedFiles.length > 0 ? (
+                            <button type="submit" disabled={botState !== 'idle'} style={{ background: botState !== 'idle' ? '#666' : '#fff', border: 'none', color: '#000', cursor: botState !== 'idle' ? 'not-allowed' : 'pointer', display: 'flex', padding: 6, borderRadius: '50%' }}>
+                              <ArrowUp size={16} strokeWidth={3} />
+                            </button>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                              <button type="button" onClick={handleMicClick} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 6 }}>
+                                <Mic size={20} />
+                              </button>
+                              <button type="button" style={{ background: '#fff', border: 'none', color: '#000', cursor: 'pointer', display: 'flex', padding: 4, borderRadius: '50%' }}>
+                                <AudioLines size={18} strokeWidth={2.5} />
+                              </button>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   )}
+
+                  {/* Input Layout for Image & Search modes */}
+                  {(activeMode === 'image' || activeMode === 'search') && (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+                          <input 
+                            type="text" 
+                            value={inputValue}
+                            onChange={e => setInputValue(e.target.value)}
+                            placeholder={activeMode === 'search' ? "Rechercher sur le web" : "Décrire ou modifier une image"}
+                            style={{ flex: 1, background: 'transparent', border: 'none', color: '#fff', fontSize: 16, outline: 'none', minHeight: '40px' }}
+                            disabled={botState !== 'idle'}
+                          />
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <button type="button" onClick={handleAttachClick} style={{ background: 'transparent', border: '1px solid #444', borderRadius: '50%', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 6, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}><Plus size={16} /></button>
+                            
+                            {activeMode === 'image' && (
+                              <>
+                                <button type="button" onClick={() => { setActiveMode('default'); setShowAspectRatioMenu(false); }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', backgroundColor: '#2f425c', color: '#93c5fd', border: 'none', borderRadius: 999, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                                  <X size={14} /> Image
+                                </button>
+                                <div style={{ position: 'relative' }}>
+                                  <button type="button" onClick={() => setShowAspectRatioMenu(!showAspectRatioMenu)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', backgroundColor: '#444', border: 'none', borderRadius: 999, color: '#ececec', fontSize: 13, cursor: 'pointer' }}>
+                                    <Monitor size={14} /> {aspectRatio} <ChevronDown size={14} />
+                                  </button>
+                                  {showAspectRatioMenu && (
+                                    <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 8, backgroundColor: '#2f2f2f', border: '1px solid #444', borderRadius: 12, padding: '8px 0', zIndex: 50, width: 220, boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+                                       <div style={{ padding: '8px 16px', fontSize: 12, color: '#b4b4b4', fontWeight: 600 }}>Choisir le format de l'image</div>
+                                       {[
+                                         { label: 'Auto', value: 'Auto', icon: <Monitor size={14}/> },
+                                         { label: 'Carré 1:1', value: 'Square 1:1', icon: <div style={{width: 14, height: 14, border: '1px solid #ececec', borderRadius: 2}}></div> },
+                                         { label: 'Portrait 3:4', value: 'Portrait 3:4', icon: <div style={{width: 10, height: 14, border: '1px solid #ececec', borderRadius: 2}}></div> },
+                                         { label: 'Story 9:16', value: 'Story 9:16', icon: <div style={{width: 8, height: 14, border: '1px solid #ececec', borderRadius: 2}}></div> },
+                                         { label: 'Paysage 4:3', value: 'Landscape 4:3', icon: <div style={{width: 14, height: 10, border: '1px solid #ececec', borderRadius: 2}}></div> },
+                                         { label: 'Écran large 16:9', value: 'Widescreen 16:9', icon: <div style={{width: 14, height: 8, border: '1px solid #ececec', borderRadius: 2}}></div> }
+                                       ].map(opt => (
+                                         <div key={opt.value} onClick={() => { setAspectRatio(opt.value); setShowAspectRatioMenu(false); }} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', fontSize: 14, color: '#ececec', backgroundColor: aspectRatio === opt.value ? 'rgba(255,255,255,0.1)' : 'transparent' }}>
+                                           {opt.icon} <span style={{flex: 1}}>{opt.label}</span> {aspectRatio === opt.value && <Check size={14} />}
+                                         </div>
+                                       ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </>
+                            )}
+                            
+                            {activeMode === 'search' && (
+                              <button type="button" onClick={() => setActiveMode('default')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', backgroundColor: '#1e3a8a', color: '#60a5fa', border: 'none', borderRadius: 999, fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                                <X size={14} /> <Globe size={14} /> Rechercher
+                              </button>
+                            )}
+
+                         </div>
+                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {isRecording ? (
+                              <>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, paddingLeft: 12, overflow: 'hidden' }}>
+                                  <div style={{ color: '#555', whiteSpace: 'nowrap', overflow: 'hidden', fontSize: 20, letterSpacing: 2, userSelect: 'none' }}>
+                                    ........................
+                                  </div>
+                                </div>
+                                <button type="button" onClick={handleCancelRecord} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 8 }}>
+                                  <X size={20} />
+                                </button>
+                                <button type="button" onClick={handleSendRecord} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 8 }}>
+                                  <Check size={20} />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button type="button" onClick={handleMicClick} style={{ background: 'transparent', border: 'none', color: '#ececec', cursor: 'pointer', display: 'flex', padding: 6 }}>
+                                  <Mic size={20} />
+                                </button>
+                                {inputValue.trim() || attachedFiles.length > 0 ? (
+                                  <button type="submit" disabled={botState !== 'idle'} style={{ background: botState !== 'idle' ? '#666' : '#fff', border: 'none', color: '#000', cursor: botState !== 'idle' ? 'not-allowed' : 'pointer', display: 'flex', padding: 8, borderRadius: '50%' }}>
+                                    <ArrowUp size={16} strokeWidth={3} />
+                                  </button>
+                                ) : (
+                                  <button type="button" style={{ background: '#fff', border: 'none', color: '#000', cursor: 'pointer', display: 'flex', padding: 4, borderRadius: '50%' }}>
+                                    <AudioLines size={18} strokeWidth={2.5} />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                         </div>
+                      </div>
+                    </>
+                  )}
                 </form>
-                
+
                 {showAttachmentMenu && (
                   <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 8, backgroundColor: '#2f2f2f', border: '1px solid #444', borderRadius: 12, padding: 8, zIndex: 50, width: 200, boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', cursor: 'pointer', fontSize: 14, borderRadius: 6, color: '#ececec' }}>
@@ -586,17 +1092,89 @@ export default function Chat({ currentUser, onLogout }) {
                   </div>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 12, marginTop: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
-                <button onClick={() => submitMessage("Créer une image de...")} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', backgroundColor: 'var(--user-input-bg)', border: '1px solid #444', borderRadius: 999, color: '#ececec', fontSize: 13, cursor: 'pointer' }}>
-                  <ImageIcon size={14} /> Créer une image
-                </button>
-                <button onClick={() => submitMessage("Écrire ou modifier...")} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', backgroundColor: 'var(--user-input-bg)', border: '1px solid #444', borderRadius: 999, color: '#ececec', fontSize: 13, cursor: 'pointer' }}>
-                  <Edit3 size={14} /> Écrire ou modifier
-                </button>
-                <button onClick={() => submitMessage("Rechercher quelque chose sur...")} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', backgroundColor: 'var(--user-input-bg)', border: '1px solid #444', borderRadius: 999, color: '#ececec', fontSize: 13, cursor: 'pointer' }}>
-                  <Globe size={14} /> Rechercher quelque chose
-                </button>
-              </div>
+              
+              {/* Context Menus below input */}
+              {activeMode === 'default' && (
+                <div style={{ display: 'flex', gap: 12, marginTop: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <button type="button" onClick={() => setActiveMode('image')} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid #444', borderRadius: 999, color: '#ececec', fontSize: 13, cursor: 'pointer' }}>
+                    <ImageIcon size={14} /> Créer une image
+                  </button>
+                  <button type="button" onClick={() => setActiveMode('write')} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid #444', borderRadius: 999, color: '#ececec', fontSize: 13, cursor: 'pointer' }}>
+                    <Edit3 size={14} /> Écrire ou modifier
+                  </button>
+                  <button type="button" onClick={() => setActiveMode('search')} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', backgroundColor: 'transparent', border: '1px solid #444', borderRadius: 999, color: '#ececec', fontSize: 13, cursor: 'pointer' }}>
+                    <Globe size={14} /> Rechercher quelque chose
+                  </button>
+                </div>
+              )}
+
+              {activeMode === 'image' && (
+                <div style={{ marginTop: 32, userSelect: 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <div style={{ fontSize: 18, fontWeight: 600, color: '#ececec' }}>Explorer des idées</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontSize: 13, color: '#b4b4b4', cursor: 'pointer', borderBottom: '1px dashed #b4b4b4' }}>Nouveautés</span>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button type="button" style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', backgroundColor: '#2f2f2f', color: '#ececec', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronLeft size={16}/></button>
+                        <button type="button" style={{ width: 28, height: 28, borderRadius: '50%', border: 'none', backgroundColor: '#2f2f2f', color: '#ececec', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><ChevronRight size={16}/></button>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8, msOverflowStyle: 'none', scrollbarWidth: 'none' }}>
+                    <div style={{ minWidth: 160, height: 200, backgroundColor: '#2f2f2f', borderRadius: 16, display: 'flex', flexDirection: 'column', padding: 16, cursor: 'pointer', position: 'relative' }}>
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Plus size={24} color="#ececec" />
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#ececec' }}>Importer une photo</div>
+                    </div>
+                    <div style={{ minWidth: 160, height: 200, borderRadius: 16, padding: 16, cursor: 'pointer', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'flex-end', background: 'linear-gradient(to bottom right, #facc15, #ea580c)' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>Améliorer votre espace</div>
+                    </div>
+                    <div style={{ minWidth: 160, height: 200, borderRadius: 16, padding: 16, cursor: 'pointer', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'flex-end', background: 'linear-gradient(to bottom right, #38bdf8, #3b82f6)' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>Envie de voyager</div>
+                    </div>
+                    <div style={{ minWidth: 160, height: 200, borderRadius: 16, padding: 16, cursor: 'pointer', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'flex-end', background: 'linear-gradient(to bottom right, #10b981, #047857)' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>Gribouillage</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeMode === 'write' && (
+                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div onClick={() => setInputValue("Rendre un message persuasif ")} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8, color: '#ececec', cursor: 'pointer', backgroundColor: '#2f2f2f', fontSize: 14 }}>
+                    <Edit3 size={16} color="#b4b4b4" /> Rendre un message persuasif
+                  </div>
+                  <div onClick={() => setInputValue("Améliorer la clarté ")} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8, color: '#ececec', cursor: 'pointer', transition: 'background 0.2s', fontSize: 14 }}>
+                    <Edit3 size={16} color="#b4b4b4" /> Améliorer la clarté
+                  </div>
+                  <div onClick={() => setInputValue("Améliorer la fluidité ")} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8, color: '#ececec', cursor: 'pointer', transition: 'background 0.2s', fontSize: 14 }}>
+                    <Edit3 size={16} color="#b4b4b4" /> Améliorer la fluidité
+                  </div>
+                  <div onClick={() => setInputValue("Raccourcir sans perdre le sens ")} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8, color: '#ececec', cursor: 'pointer', transition: 'background 0.2s', fontSize: 14 }}>
+                    <Edit3 size={16} color="#b4b4b4" /> Raccourcir sans perdre le sens
+                  </div>
+                </div>
+              )}
+
+              {activeMode === 'search' && (
+                <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div onClick={() => setInputValue("Clint Eastwood ")} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8, color: '#ececec', cursor: 'pointer', transition: 'background 0.2s', fontSize: 14 }}>
+                    <TrendingUp size={16} color="#b4b4b4" /> Clint Eastwood
+                  </div>
+                  <div onClick={() => setInputValue("California Governor Race 2026 ")} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8, color: '#ececec', cursor: 'pointer', transition: 'background 0.2s', fontSize: 14 }}>
+                    <TrendingUp size={16} color="#b4b4b4" /> California Governor Race 2026
+                  </div>
+                  <div onClick={() => setInputValue("Scott Pelley ")} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8, color: '#ececec', cursor: 'pointer', transition: 'background 0.2s', fontSize: 14 }}>
+                    <TrendingUp size={16} color="#b4b4b4" /> Scott Pelley
+                  </div>
+                  <div onClick={() => setInputValue("Spencer Pratt ")} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderRadius: 8, color: '#ececec', cursor: 'pointer', transition: 'background 0.2s', fontSize: 14 }}>
+                    <TrendingUp size={16} color="#b4b4b4" /> Spencer Pratt
+                  </div>
+                </div>
+              )}
+
             </div>
           </div>
         ) : (
@@ -616,7 +1194,7 @@ export default function Chat({ currentUser, onLogout }) {
                     {msg.role === 'assistant' ? (
                       <ReactMarkdown 
                         remarkPlugins={[remarkGfm]}
-                        components={{ code: CodeBlock }}
+                        components={MarkdownComponents}
                       >
                         {msg.content}
                       </ReactMarkdown>
@@ -724,7 +1302,8 @@ export default function Chat({ currentUser, onLogout }) {
               </div>
             </div>
           </div>
-        )}
+        )
+        ) : null}
       </div>
 
       {/* Action Modals */}

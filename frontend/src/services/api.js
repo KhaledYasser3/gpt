@@ -4,9 +4,13 @@ async function fetchWithAuth(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
   
   const headers = {
-    'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
+
+  // Don't set Content-Type for FormData — browser sets it automatically with boundary
+  if (!options.isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   const token = localStorage.getItem('access_token');
   if (token) {
@@ -94,12 +98,12 @@ export const api = {
       }),
   },
   chat: {
-    getChats: () => 
-      fetchWithAuth('/chats'),
-    createChat: (title) => 
+    getChats: (projectId = null) => 
+      fetchWithAuth(projectId ? `/chats?project_id=${projectId}` : '/chats'),
+    createChat: (title, projectId = null) => 
       fetchWithAuth('/chats', {
         method: 'POST',
-        body: JSON.stringify({ title: title || 'Nouveau chat' })
+        body: JSON.stringify({ title, project_id: projectId })
       }),
     deleteChat: (chatId) => 
       fetchWithAuth(`/chats/${chatId}`, {
@@ -107,10 +111,35 @@ export const api = {
       }),
     getMessages: (chatId) => 
       fetchWithAuth(`/chats/${chatId}/messages`),
-    sendMessage: (chatId, content) => 
-      fetchWithAuth(`/chats/${chatId}/messages`, {
+    sendMessage: (chatId, content, files = []) => {
+      const formData = new FormData();
+      formData.append('content', content);
+      if (files && files.length > 0) {
+        files.forEach(f => formData.append('files', f));
+      }
+      return fetchWithAuth(`/chats/${chatId}/messages`, {
         method: 'POST',
-        body: JSON.stringify({ role: 'user', content })
-      })
+        body: formData,
+        isFormData: true
+      });
+    }
+  },
+  projects: {
+    getProjects: () =>
+      fetchWithAuth('/projects'),
+    createProject: (name, description = '') =>
+      fetchWithAuth('/projects', {
+        method: 'POST',
+        body: JSON.stringify({ name, description })
+      }),
+    updateProject: (projectId, name, description) =>
+      fetchWithAuth(`/projects/${projectId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name, description })
+      }),
+    deleteProject: (projectId) =>
+      fetchWithAuth(`/projects/${projectId}`, {
+        method: 'DELETE'
+      }),
   }
 };

@@ -33,7 +33,7 @@ class ChatBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255, description="Title of the chat thread")
 
 class ChatCreate(ChatBase):
-    pass
+    project_id: Optional[uuid.UUID] = None
 
 class ChatUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
@@ -41,6 +41,7 @@ class ChatUpdate(BaseModel):
 class ChatResponse(ChatBase):
     id: uuid.UUID
     user_id: uuid.UUID
+    project_id: Optional[uuid.UUID]
     created_at: datetime
     updated_at: datetime
 
